@@ -1,51 +1,98 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import type { BudgetCategory, MonthlyBudget } from "@shared/schema";
+import { format } from "date-fns";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import BudgetAdjustment from "@/components/BudgetAdjustment";
 import ThemeToggle from "@/components/ThemeToggle";
 import { useToast } from "@/hooks/use-toast";
-
-//todo: remove mock functionality - this will be replaced with real data from the backend
-const MOCK_CATEGORIES = [
-  { id: "1", name: "Rent", monthlyBudget: 5900 },
-  { id: "2", name: "Leo School", monthlyBudget: 1425 },
-  { id: "3", name: "Child Support", monthlyBudget: 800 },
-  { id: "4", name: "Car: Gas + Insurance + Repair", monthlyBudget: 200 },
-  { id: "5", name: "Groceries", monthlyBudget: 1500 },
-  { id: "6", name: "Utilities", monthlyBudget: 500 },
-  { id: "7", name: "Leo activities", monthlyBudget: 200 },
-  { id: "8", name: "Internet / Phone", monthlyBudget: 210 },
-  { id: "9", name: "Trizipetide", monthlyBudget: 283 },
-  { id: "10", name: "Home Improvement", monthlyBudget: 730 },
-  { id: "11", name: "Medical / Meds / Supplements", monthlyBudget: 80 },
-  { id: "12", name: "Clothes", monthlyBudget: 300 },
-  { id: "13", name: "Travel", monthlyBudget: 250 },
-  { id: "14", name: "Grooming", monthlyBudget: 500 },
-  { id: "15", name: "Fun", monthlyBudget: 500 },
-  { id: "16", name: "Miou Miou", monthlyBudget: 150 },
-  { id: "17", name: "Cleaning Help", monthlyBudget: 150 },
-  { id: "18", name: "Botox", monthlyBudget: 332 },
-];
-
-const TOTAL_INCOME = 16060;
+import { getCategories, updateCategory, getMonthlyBudget, updateMonthlyBudget, createMonthlyBudget } from "@/lib/api";
+import { queryClient } from "@/lib/queryClient";
 
 export default function AdjustBudget() {
   const { toast } = useToast();
+  const currentMonth = new Date();
+  const currentMonthStr = format(currentMonth, 'yyyy-MM');
 
-  const handleSave = (updatedCategories: any[], newIncome: number) => {
-    console.log('Budget saved:', { updatedCategories, newIncome });
-    toast({
-      title: "Budget Updated",
-      description: "Your budget has been successfully updated for next month.",
-    });
-    setTimeout(() => {
-      window.location.href = '/';
-    }, 1000);
+  const { data: categories = [], isLoading: categoriesLoading } = useQuery<BudgetCategory[]>({
+    queryKey: ['/api/categories'],
+  });
+
+  const { data: monthlyBudget } = useQuery<MonthlyBudget | null>({
+    queryKey: ['/api/budgets', currentMonthStr],
+    queryFn: () => getMonthlyBudget(currentMonthStr),
+  });
+
+  const updateCategoryMutation = useMutation({
+    mutationFn: ({ id, updates }: { id: string; updates: any }) => updateCategory(id, updates),
+  });
+
+  const updateBudgetMutation = useMutation({
+    mutationFn: async (income: number) => {
+      if (monthlyBudget) {
+        return updateMonthlyBudget(currentMonthStr, income.toString());
+      } else {
+        return createMonthlyBudget(currentMonthStr, income.toString());
+      }
+    },
+  });
+
+  const handleSave = async (updatedCategories: any[], newIncome: number) => {
+    try {
+      await Promise.all(
+        updatedCategories.map((cat) =>
+          updateCategoryMutation.mutateAsync({
+            id: cat.id,
+            updates: { monthlyBudget: cat.monthlyBudget.toString() },
+          })
+        )
+      );
+
+      await updateBudgetMutation.mutateAsync(newIncome);
+
+      queryClient.invalidateQueries({ queryKey: ['/api/categories'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/budgets', currentMonthStr] });
+
+      toast({
+        title: "Budget Updated",
+        description: "Your budget has been successfully updated.",
+      });
+
+      setTimeout(() => {
+        window.location.href = '/';
+      }, 1000);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update budget. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleCancel = () => {
     window.location.href = '/';
   };
+
+  if (categoriesLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-lg font-semibold">Loading...</div>
+        </div>
+      </div>
+    );
+  }
+
+  const categoriesWithNumbers = categories.map((cat) => ({
+    ...cat,
+    monthlyBudget: typeof cat.monthlyBudget === 'string' ? parseFloat(cat.monthlyBudget) : cat.monthlyBudget,
+  }));
+
+  const totalIncome = monthlyBudget
+    ? (typeof monthlyBudget.totalIncome === 'string' ? parseFloat(monthlyBudget.totalIncome) : monthlyBudget.totalIncome)
+    : 16060;
 
   return (
     <div className="min-h-screen bg-background">
@@ -68,8 +115,8 @@ export default function AdjustBudget() {
 
       <main className="max-w-4xl mx-auto px-4 py-8 pb-32">
         <BudgetAdjustment
-          categories={MOCK_CATEGORIES}
-          totalIncome={TOTAL_INCOME}
+          categories={categoriesWithNumbers}
+          totalIncome={totalIncome}
           onSave={handleSave}
           onCancel={handleCancel}
         />

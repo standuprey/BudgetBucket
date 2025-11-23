@@ -1,6 +1,8 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import type { BudgetCategory, Expense, MonthlyBudget } from "@shared/schema";
 import { format } from "date-fns";
-import { ChevronLeft, ChevronRight, Calendar, Settings } from "lucide-react";
+import { ChevronLeft, ChevronRight, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import BudgetOverview from "@/components/BudgetOverview";
@@ -9,131 +11,148 @@ import ExpenseList from "@/components/ExpenseList";
 import ExpenseEntryDialog from "@/components/ExpenseEntryDialog";
 import MonthlyRecap from "@/components/MonthlyRecap";
 import ThemeToggle from "@/components/ThemeToggle";
+import { getCategories, getExpenses, createExpense, getMonthlyBudget, initializeDefaultData } from "@/lib/api";
+import { queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
-//todo: remove mock functionality - this will be replaced with real data from the backend
-const MOCK_CATEGORIES = [
-  { id: "1", name: "Rent", monthlyBudget: 5900, icon: "Home" },
-  { id: "2", name: "Leo School", monthlyBudget: 1425, icon: "GraduationCap" },
-  { id: "3", name: "Child Support", monthlyBudget: 800, icon: "Users" },
-  { id: "4", name: "Car: Gas + Insurance + Repair", monthlyBudget: 200, icon: "Car" },
-  { id: "5", name: "Groceries", monthlyBudget: 1500, icon: "ShoppingCart" },
-  { id: "6", name: "Utilities", monthlyBudget: 500, icon: "Zap" },
-  { id: "7", name: "Leo activities", monthlyBudget: 200, icon: "Sparkles" },
-  { id: "8", name: "Internet / Phone", monthlyBudget: 210, icon: "Wifi" },
-  { id: "9", name: "Trizipetide", monthlyBudget: 283, icon: "Syringe" },
-  { id: "10", name: "Home Improvement", monthlyBudget: 730, icon: "Wrench" },
-  { id: "11", name: "Medical / Meds / Supplements", monthlyBudget: 80, icon: "HeartPulse" },
-  { id: "12", name: "Clothes", monthlyBudget: 300, icon: "Shirt" },
-  { id: "13", name: "Travel", monthlyBudget: 250, icon: "Plane" },
-  { id: "14", name: "Grooming", monthlyBudget: 500, icon: "Scissors" },
-  { id: "15", name: "Fun", monthlyBudget: 500, icon: "PartyPopper" },
-  { id: "16", name: "Miou Miou", monthlyBudget: 150, icon: "Cat" },
-  { id: "17", name: "Cleaning Help", monthlyBudget: 150, icon: "Sparkle" },
-  { id: "18", name: "Botox", monthlyBudget: 332, icon: "Sparkles" },
+const DEFAULT_CATEGORIES = [
+  { name: "Rent", monthlyBudget: "5900.00", icon: "Home" },
+  { name: "Leo School", monthlyBudget: "1425.00", icon: "GraduationCap" },
+  { name: "Child Support", monthlyBudget: "800.00", icon: "Users" },
+  { name: "Car: Gas + Insurance + Repair", monthlyBudget: "200.00", icon: "Car" },
+  { name: "Groceries", monthlyBudget: "1500.00", icon: "ShoppingCart" },
+  { name: "Utilities", monthlyBudget: "500.00", icon: "Zap" },
+  { name: "Leo activities", monthlyBudget: "200.00", icon: "Sparkles" },
+  { name: "Internet / Phone", monthlyBudget: "210.00", icon: "Wifi" },
+  { name: "Trizipetide", monthlyBudget: "283.00", icon: "Syringe" },
+  { name: "Home Improvement", monthlyBudget: "730.00", icon: "Wrench" },
+  { name: "Medical / Meds / Supplements", monthlyBudget: "80.00", icon: "HeartPulse" },
+  { name: "Clothes", monthlyBudget: "300.00", icon: "Shirt" },
+  { name: "Travel", monthlyBudget: "250.00", icon: "Plane" },
+  { name: "Grooming", monthlyBudget: "500.00", icon: "Scissors" },
+  { name: "Fun", monthlyBudget: "500.00", icon: "PartyPopper" },
+  { name: "Miou Miou", monthlyBudget: "150.00", icon: "Cat" },
+  { name: "Cleaning Help", monthlyBudget: "150.00", icon: "Sparkle" },
+  { name: "Botox", monthlyBudget: "332.00", icon: "Sparkles" },
 ];
 
-const MOCK_EXPENSES = [
-  {
-    id: "1",
-    amount: 5900,
-    categoryId: "1",
-    date: "2025-11-01",
-    notes: "Monthly rent payment",
-  },
-  {
-    id: "2",
-    amount: 125.50,
-    categoryId: "5",
-    date: "2025-11-20",
-    notes: "Weekly grocery shopping",
-  },
-  {
-    id: "3",
-    amount: 45.00,
-    categoryId: "6",
-    date: "2025-11-19",
-  },
-  {
-    id: "4",
-    amount: 1425.00,
-    categoryId: "2",
-    date: "2025-11-15",
-    notes: "Leo's school tuition",
-  },
-  {
-    id: "5",
-    amount: 250.00,
-    categoryId: "5",
-    date: "2025-11-18",
-    notes: "Costco run",
-  },
-  {
-    id: "6",
-    amount: 75.00,
-    categoryId: "4",
-    date: "2025-11-17",
-    notes: "Gas for the week",
-  },
-  {
-    id: "7",
-    amount: 332.00,
-    categoryId: "18",
-    date: "2025-11-16",
-  },
-  {
-    id: "8",
-    amount: 150.00,
-    categoryId: "17",
-    date: "2025-11-15",
-    notes: "Bi-weekly cleaning",
-  },
-];
-
-const TOTAL_INCOME = 16060;
+const DEFAULT_INCOME = 16060.00;
 
 export default function Home() {
   const [currentMonth] = useState(new Date());
-  const [expenses, setExpenses] = useState(MOCK_EXPENSES);
   const [showRecap, setShowRecap] = useState(false);
+  const { toast } = useToast();
+  
+  const currentMonthStr = format(currentMonth, 'yyyy-MM');
+
+  const { data: categories = [], isLoading: categoriesLoading } = useQuery<BudgetCategory[]>({
+    queryKey: ['/api/categories'],
+  });
+
+  const { data: expenses = [], isLoading: expensesLoading } = useQuery<Expense[]>({
+    queryKey: ['/api/expenses', currentMonthStr],
+    queryFn: () => getExpenses(currentMonthStr),
+  });
+
+  const { data: monthlyBudget } = useQuery<MonthlyBudget | null>({
+    queryKey: ['/api/budgets', currentMonthStr],
+    queryFn: () => getMonthlyBudget(currentMonthStr),
+  });
+
+  useEffect(() => {
+    const initializeData = async () => {
+      if (!categoriesLoading && categories.length === 0) {
+        try {
+          await initializeDefaultData(DEFAULT_CATEGORIES, DEFAULT_INCOME, currentMonthStr);
+          queryClient.invalidateQueries({ queryKey: ['/api/categories'] });
+          queryClient.invalidateQueries({ queryKey: ['/api/budgets', currentMonthStr] });
+        } catch (error) {
+          console.error('Failed to initialize default data:', error);
+        }
+      }
+    };
+    initializeData();
+  }, [categoriesLoading, categories.length, currentMonthStr]);
+
+  const createExpenseMutation = useMutation({
+    mutationFn: createExpense,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/expenses', currentMonthStr] });
+      toast({
+        title: "Expense Added",
+        description: "Your expense has been successfully tracked.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to add expense. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
 
   const handleAddExpense = (expenseData: any) => {
-    const newExpense = {
-      id: Date.now().toString(),
-      amount: parseFloat(expenseData.amount),
-      categoryId: expenseData.categoryId,
-      date: expenseData.date,
-      notes: expenseData.notes || undefined,
-    };
-    setExpenses([newExpense, ...expenses]);
-    console.log('Expense added:', newExpense);
+    createExpenseMutation.mutate(expenseData);
   };
 
   const categorySpending = useMemo(() => {
     const spending: Record<string, number> = {};
     expenses.forEach((expense) => {
-      spending[expense.categoryId] = (spending[expense.categoryId] || 0) + expense.amount;
+      const amount = typeof expense.amount === 'string' ? parseFloat(expense.amount) : expense.amount;
+      spending[expense.categoryId] = (spending[expense.categoryId] || 0) + amount;
     });
     return spending;
   }, [expenses]);
 
-  const totalBudget = MOCK_CATEGORIES.reduce((sum, cat) => sum + cat.monthlyBudget, 0);
-  const totalSpent = expenses.reduce((sum, exp) => sum + exp.amount, 0);
-  const savings = TOTAL_INCOME - totalSpent;
+  const totalBudget = categories.reduce((sum, cat) => {
+    const budget = typeof cat.monthlyBudget === 'string' ? parseFloat(cat.monthlyBudget) : cat.monthlyBudget;
+    return sum + budget;
+  }, 0);
+  
+  const totalSpent = expenses.reduce((sum, exp) => {
+    const amount = typeof exp.amount === 'string' ? parseFloat(exp.amount) : exp.amount;
+    return sum + amount;
+  }, 0);
 
-  const enrichedExpenses = expenses.map((expense) => {
-    const category = MOCK_CATEGORIES.find((cat) => cat.id === expense.categoryId);
+  const totalIncome = monthlyBudget 
+    ? (typeof monthlyBudget.totalIncome === 'string' ? parseFloat(monthlyBudget.totalIncome) : monthlyBudget.totalIncome)
+    : DEFAULT_INCOME;
+
+  const savings = totalIncome - totalSpent;
+
+  const enrichedExpenses = expenses.map((expense: any) => {
+    const amount = typeof expense.amount === 'string' ? parseFloat(expense.amount) : expense.amount;
     return {
-      ...expense,
-      categoryName: category?.name || "Unknown",
-      categoryIcon: category?.icon || "DollarSign",
+      id: expense.id,
+      amount,
+      categoryName: expense.categoryName || "Unknown",
+      categoryIcon: expense.categoryIcon || "DollarSign",
+      date: expense.date,
+      notes: expense.notes || undefined,
+    };
+  }).sort((a, b) => {
+    return new Date(b.date).getTime() - new Date(a.date).getTime();
+  });
+
+  const categorySummaries = categories.map((cat) => {
+    const budget = typeof cat.monthlyBudget === 'string' ? parseFloat(cat.monthlyBudget) : cat.monthlyBudget;
+    return {
+      name: cat.name,
+      spent: categorySpending[cat.id] || 0,
+      budget,
     };
   });
 
-  const categorySummaries = MOCK_CATEGORIES.map((cat) => ({
-    name: cat.name,
-    spent: categorySpending[cat.id] || 0,
-    budget: cat.monthlyBudget,
-  }));
+  if (categoriesLoading || expensesLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-lg font-semibold">Loading your budget...</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -179,7 +198,7 @@ export default function Home() {
         <BudgetOverview
           totalBudget={totalBudget}
           totalSpent={totalSpent}
-          totalIncome={TOTAL_INCOME}
+          totalIncome={totalIncome}
         />
 
         <Tabs defaultValue="categories" className="w-full">
@@ -192,15 +211,18 @@ export default function Home() {
             </TabsTrigger>
           </TabsList>
           <TabsContent value="categories" className="space-y-4 mt-6">
-            {MOCK_CATEGORIES.map((category) => (
-              <CategoryProgressCard
-                key={category.id}
-                categoryName={category.name}
-                icon={category.icon}
-                spent={categorySpending[category.id] || 0}
-                budget={category.monthlyBudget}
-              />
-            ))}
+            {categories.map((category) => {
+              const budget = typeof category.monthlyBudget === 'string' ? parseFloat(category.monthlyBudget) : category.monthlyBudget;
+              return (
+                <CategoryProgressCard
+                  key={category.id}
+                  categoryName={category.name}
+                  icon={category.icon}
+                  spent={categorySpending[category.id] || 0}
+                  budget={budget}
+                />
+              );
+            })}
           </TabsContent>
           <TabsContent value="expenses" className="mt-6">
             <ExpenseList expenses={enrichedExpenses} />
@@ -209,7 +231,7 @@ export default function Home() {
       </main>
 
       <ExpenseEntryDialog
-        categories={MOCK_CATEGORIES}
+        categories={categories}
         onAddExpense={handleAddExpense}
       />
 
@@ -219,11 +241,10 @@ export default function Home() {
         month={format(currentMonth, 'MMMM yyyy')}
         totalSpent={totalSpent}
         totalBudget={totalBudget}
-        totalIncome={TOTAL_INCOME}
+        totalIncome={totalIncome}
         savings={savings}
         categories={categorySummaries}
         onAdjustBudget={() => {
-          console.log('Navigate to budget adjustment');
           window.location.href = '/adjust-budget';
         }}
       />
