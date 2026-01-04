@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import type { BudgetCategory, Expense, MonthlyBudget } from "@shared/schema";
 import { format } from "date-fns";
-import { ChevronLeft, ChevronRight, Calendar } from "lucide-react";
+import { ChevronLeft, ChevronRight, Calendar, DollarSign, Gift, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import BudgetOverview from "@/components/BudgetOverview";
@@ -11,42 +11,67 @@ import ExpenseList from "@/components/ExpenseList";
 import ExpenseEntryDialog from "@/components/ExpenseEntryDialog";
 import MonthlyRecap from "@/components/MonthlyRecap";
 import ThemeToggle from "@/components/ThemeToggle";
-import { getCategories, getExpenses, createExpense, getMonthlyBudget, initializeDefaultData } from "@/lib/api";
+import { getCategories, getExpenses, createExpense, getMonthlyBudget, getBudgets, initializeDefaultData } from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
 const DEFAULT_CATEGORIES = [
-  { name: "Rent", monthlyBudget: "5900.00", icon: "Home" },
-  { name: "Leo School", monthlyBudget: "1425.00", icon: "GraduationCap" },
-  { name: "Child Support", monthlyBudget: "800.00", icon: "Users" },
-  { name: "Car: Gas + Insurance + Repair", monthlyBudget: "200.00", icon: "Car" },
-  { name: "Groceries", monthlyBudget: "1500.00", icon: "ShoppingCart" },
-  { name: "Utilities", monthlyBudget: "500.00", icon: "Zap" },
-  { name: "Leo activities", monthlyBudget: "200.00", icon: "Sparkles" },
-  { name: "Internet / Phone", monthlyBudget: "210.00", icon: "Wifi" },
-  { name: "Trizipetide", monthlyBudget: "283.00", icon: "Syringe" },
-  { name: "Home Improvement", monthlyBudget: "730.00", icon: "Wrench" },
-  { name: "Medical / Meds / Supplements", monthlyBudget: "80.00", icon: "HeartPulse" },
-  { name: "Clothes", monthlyBudget: "300.00", icon: "Shirt" },
-  { name: "Travel", monthlyBudget: "250.00", icon: "Plane" },
-  { name: "Grooming", monthlyBudget: "500.00", icon: "Scissors" },
-  { name: "Fun", monthlyBudget: "500.00", icon: "PartyPopper" },
-  { name: "Miou Miou", monthlyBudget: "150.00", icon: "Cat" },
-  { name: "Cleaning Help", monthlyBudget: "150.00", icon: "Sparkle" },
-  { name: "Botox", monthlyBudget: "332.00", icon: "Sparkles" },
+  { name: "Rent", monthlyBudget: 5900, icon: "Home" },
+  { name: "Child Support", monthlyBudget: 800, icon: "Users" },
+  { name: "Lulu Activities", monthlyBudget: 300, icon: "Star" },
+  { name: "Car: Gas + Insurance + Repair", monthlyBudget: 200, icon: "Car" },
+  { name: "Groceries", monthlyBudget: 1500, icon: "ShoppingCart" },
+  { name: "Utilities", monthlyBudget: 500, icon: "Zap" },
+  { name: "Leo activities", monthlyBudget: 300, icon: "Sparkles" },
+  { name: "Internet / Phone", monthlyBudget: 210, icon: "Wifi" },
+  { name: "Trizipetide", monthlyBudget: 283, icon: "Syringe" },
+  { name: "Home Improvement", monthlyBudget: 730, icon: "Wrench" },
+  { name: "Medical / Meds / Supplements", monthlyBudget: 80, icon: "HeartPulse" },
+  { name: "Clothes", monthlyBudget: 300, icon: "Shirt" },
+  { name: "Travel", monthlyBudget: 250, icon: "Plane" },
+  { name: "Grooming", monthlyBudget: 500, icon: "Scissors" },
+  { name: "Fun", monthlyBudget: 500, icon: "PartyPopper" },
+  { name: "Miou Miou", monthlyBudget: 150, icon: "Cat" },
+  { name: "Cleaning Help", monthlyBudget: 150, icon: "Sparkle" },
+  { name: "Botox", monthlyBudget: 332, icon: "Sparkles" },
+  { name: "Gift", monthlyBudget: 300, icon: "Gift" },
 ];
 
-const DEFAULT_INCOME = 16060.00;
+const DEFAULT_INCOME = 16060;
 
 export default function Home() {
-  const [currentMonth] = useState(new Date());
+  const [currentMonth, setCurrentMonth] = useState(new Date());
   const [showRecap, setShowRecap] = useState(false);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const { toast } = useToast();
   
-  const currentMonthStr = format(currentMonth, 'yyyy-MM');
+  const currentMonthStr = useMemo(() => format(currentMonth, 'yyyy-MM'), [currentMonth]);
+  const today = useMemo(() => new Date(), []);
+  const isCurrentMonth = useMemo(() => 
+    format(currentMonth, 'yyyy-MM') === format(today, 'yyyy-MM'), 
+    [currentMonth, today]
+  );
+  
+  const goToPreviousMonth = () => {
+    const newMonth = new Date(currentMonth);
+    newMonth.setMonth(newMonth.getMonth() - 1);
+    setCurrentMonth(newMonth);
+    setSelectedCategoryId(null); // Clear filter when changing months
+  };
+  
+  const goToNextMonth = () => {
+    const newMonth = new Date(currentMonth);
+    newMonth.setMonth(newMonth.getMonth() + 1);
+    // Don't allow going beyond current month
+    if (format(newMonth, 'yyyy-MM') <= format(today, 'yyyy-MM')) {
+      setCurrentMonth(newMonth);
+      setSelectedCategoryId(null); // Clear filter when changing months
+    }
+  };
 
   const { data: categories = [], isLoading: categoriesLoading } = useQuery<BudgetCategory[]>({
     queryKey: ['/api/categories'],
+    queryFn: getCategories,
   });
 
   const { data: expenses = [], isLoading: expensesLoading } = useQuery<Expense[]>({
@@ -59,20 +84,39 @@ export default function Home() {
     queryFn: () => getMonthlyBudget(currentMonthStr),
   });
 
+  const { data: allExpenses = [] } = useQuery<Expense[]>({
+    queryKey: ['/api/expenses'],
+    queryFn: () => getExpenses(),
+  });
+
+  const { data: allBudgets = [] } = useQuery<MonthlyBudget[]>({
+    queryKey: ['/api/budgets'],
+    queryFn: getBudgets,
+  });
+
   useEffect(() => {
     const initializeData = async () => {
       if (!categoriesLoading && categories.length === 0) {
+        console.log('Initializing default data...');
         try {
-          await initializeDefaultData(DEFAULT_CATEGORIES, DEFAULT_INCOME, currentMonthStr);
-          queryClient.invalidateQueries({ queryKey: ['/api/categories'] });
-          queryClient.invalidateQueries({ queryKey: ['/api/budgets', currentMonthStr] });
+          const result = await initializeDefaultData(DEFAULT_CATEGORIES, DEFAULT_INCOME, currentMonthStr);
+          console.log('Initialization successful:', result);
+          await queryClient.invalidateQueries({ queryKey: ['/api/categories'] });
+          await queryClient.invalidateQueries({ queryKey: ['/api/budgets', currentMonthStr] });
+          // Force refetch
+          await queryClient.refetchQueries({ queryKey: ['/api/categories'] });
         } catch (error) {
           console.error('Failed to initialize default data:', error);
+          toast({
+            title: "Initialization Error",
+            description: error instanceof Error ? error.message : "Failed to initialize budget data",
+            variant: "destructive",
+          });
         }
       }
     };
     initializeData();
-  }, [categoriesLoading, categories.length, currentMonthStr]);
+  }, [categoriesLoading, categories.length, currentMonthStr, toast]);
 
   const createExpenseMutation = useMutation({
     mutationFn: createExpense,
@@ -121,28 +165,83 @@ export default function Home() {
 
   const savings = totalIncome - totalSpent;
 
-  const enrichedExpenses = expenses.map((expense: any) => {
-    const amount = typeof expense.amount === 'string' ? parseFloat(expense.amount) : expense.amount;
+  // Yearly calculations
+  const currentYear = format(currentMonth, 'yyyy');
+  const currentMonthIndex = currentMonth.getMonth(); // 0-11
+  const monthsSoFar = currentMonthIndex + 1;
+
+  const yearlyExpenses = allExpenses.filter(e => e.date.startsWith(currentYear));
+  const yearlySpent = yearlyExpenses.reduce((sum, e) => {
+    const amount = typeof e.amount === 'string' ? parseFloat(e.amount) : e.amount;
+    return sum + amount;
+  }, 0);
+  
+  // Calculate yearly income by checking each month's budget record
+  let yearlyIncome = 0;
+  for (let i = 0; i < monthsSoFar; i++) {
+    const monthStr = `${currentYear}-${String(i + 1).padStart(2, '0')}`;
+    const budgetRecord = allBudgets.find(b => b.month === monthStr);
+    if (budgetRecord) {
+      const income = typeof budgetRecord.totalIncome === 'string' ? parseFloat(budgetRecord.totalIncome) : budgetRecord.totalIncome;
+      yearlyIncome += income;
+    } else {
+      yearlyIncome += DEFAULT_INCOME;
+    }
+  }
+  
+  // Total budget for the year so far
+  const totalMonthlyBudget = categories.reduce((sum, cat) => {
+    const budget = typeof cat.monthlyBudget === 'string' ? parseFloat(cat.monthlyBudget) : cat.monthlyBudget;
+    return sum + budget;
+  }, 0);
+  const yearlyBudget = totalMonthlyBudget * monthsSoFar;
+  
+  const yearlySavings = yearlyIncome - yearlySpent;
+
+  const yearlyCategorySummaries = categories.map(category => {
+    const spent = yearlyExpenses
+      .filter(e => e.categoryId === category.id)
+      .reduce((sum, e) => {
+        const amount = typeof e.amount === 'string' ? parseFloat(e.amount) : e.amount;
+        return sum + amount;
+      }, 0);
+    const budget = typeof category.monthlyBudget === 'string' ? parseFloat(category.monthlyBudget) : category.monthlyBudget;
     return {
-      id: expense.id,
-      amount,
-      categoryName: expense.categoryName || "Unknown",
-      categoryIcon: expense.categoryIcon || "DollarSign",
-      date: expense.date,
-      notes: expense.notes || undefined,
+      name: category.name,
+      spent,
+      budget: budget * monthsSoFar,
     };
-  }).sort((a, b) => {
-    return new Date(b.date).getTime() - new Date(a.date).getTime();
   });
 
-  const categorySummaries = categories.map((cat) => {
-    const budget = typeof cat.monthlyBudget === 'string' ? parseFloat(cat.monthlyBudget) : cat.monthlyBudget;
-    return {
-      name: cat.name,
-      spent: categorySpending[cat.id] || 0,
-      budget,
-    };
-  });
+  const categorySummaries = categories.map(category => ({
+    name: category.name,
+    spent: categorySpending[category.id] || 0,
+    budget: typeof category.monthlyBudget === 'string' ? parseFloat(category.monthlyBudget) : category.monthlyBudget,
+  }));
+
+  const enrichedExpenses = expenses
+    .filter((expense: any) => {
+      // If a category is selected, only show expenses from that category
+      if (selectedCategoryId) {
+        return expense.categoryId === selectedCategoryId;
+      }
+      return true;
+    })
+    .map((expense: any) => {
+      const amount = typeof expense.amount === 'string' ? parseFloat(expense.amount) : expense.amount;
+      return {
+        id: expense.id,
+        amount,
+        categoryName: expense.categoryName || "Unknown",
+        categoryIcon: expense.categoryIcon || "DollarSign",
+        date: expense.date,
+        notes: expense.notes || undefined,
+      };
+    }).sort((a, b) => {
+      return new Date(b.date).getTime() - new Date(a.date).getTime();
+    });
+
+
 
   if (categoriesLoading || expensesLoading) {
     return (
@@ -178,7 +277,12 @@ export default function Home() {
       <main className="max-w-4xl mx-auto px-4 py-8 space-y-8 pb-32">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" disabled>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={() => goToPreviousMonth()}
+              data-testid="button-previous-month"
+            >
               <ChevronLeft className="h-5 w-5" />
             </Button>
             <div>
@@ -186,12 +290,19 @@ export default function Home() {
                 {format(currentMonth, 'MMMM yyyy')}
               </h2>
               <p className="text-sm text-muted-foreground">
-                Current month
+                {isCurrentMonth ? 'Current month' : 'Past month'}
               </p>
             </div>
-            <Button variant="ghost" size="icon" disabled>
-              <ChevronRight className="h-5 w-5" />
-            </Button>
+            {!isCurrentMonth && (
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                onClick={() => goToNextMonth()}
+                data-testid="button-next-month"
+              >
+                <ChevronRight className="h-5 w-5" />
+              </Button>
+            )}
           </div>
         </div>
 
@@ -201,9 +312,13 @@ export default function Home() {
           totalIncome={totalIncome}
         />
 
-        <Tabs defaultValue="categories" className="w-full">
+        <Tabs defaultValue="categories" className="w-full" value={selectedCategoryId ? "expenses" : undefined}>
           <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="categories" data-testid="tab-categories">
+            <TabsTrigger 
+              value="categories" 
+              data-testid="tab-categories"
+              onClick={() => setSelectedCategoryId(null)}
+            >
               Categories
             </TabsTrigger>
             <TabsTrigger value="expenses" data-testid="tab-expenses">
@@ -214,17 +329,40 @@ export default function Home() {
             {categories.map((category) => {
               const budget = typeof category.monthlyBudget === 'string' ? parseFloat(category.monthlyBudget) : category.monthlyBudget;
               return (
-                <CategoryProgressCard
+                <div 
                   key={category.id}
-                  categoryName={category.name}
-                  icon={category.icon}
-                  spent={categorySpending[category.id] || 0}
-                  budget={budget}
-                />
+                  onClick={() => {
+                    setSelectedCategoryId(category.id);
+                  }}
+                  className="cursor-pointer"
+                >
+                  <CategoryProgressCard
+                    categoryName={category.name}
+                    icon={category.icon}
+                    spent={categorySpending[category.id] || 0}
+                    budget={budget}
+                  />
+                </div>
               );
             })}
           </TabsContent>
-          <TabsContent value="expenses" className="mt-6">
+          <TabsContent value="expenses" className="mt-6 space-y-4">
+            {selectedCategoryId && (
+              <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium">
+                    Filtered by: {categories.find(c => c.id === selectedCategoryId)?.name}
+                  </span>
+                </div>
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={() => setSelectedCategoryId(null)}
+                >
+                  Clear Filter
+                </Button>
+              </div>
+            )}
             <ExpenseList expenses={enrichedExpenses} />
           </TabsContent>
         </Tabs>
@@ -233,17 +371,24 @@ export default function Home() {
       <ExpenseEntryDialog
         categories={categories}
         onAddExpense={handleAddExpense}
+        defaultCategoryId={selectedCategoryId}
       />
 
       <MonthlyRecap
         open={showRecap}
         onOpenChange={setShowRecap}
         month={format(currentMonth, 'MMMM yyyy')}
+        year={currentYear}
         totalSpent={totalSpent}
         totalBudget={totalBudget}
         totalIncome={totalIncome}
         savings={savings}
         categories={categorySummaries}
+        yearlySpent={yearlySpent}
+        yearlyBudget={yearlyBudget}
+        yearlyIncome={yearlyIncome}
+        yearlySavings={yearlySavings}
+        yearlyCategories={yearlyCategorySummaries}
         onAdjustBudget={() => {
           window.location.href = '/adjust-budget';
         }}

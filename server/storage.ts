@@ -6,7 +6,8 @@ import {
   type MonthlyBudget,
   type InsertMonthlyBudget
 } from "@shared/schema";
-import { randomUUID } from "crypto";
+import { eq } from "drizzle-orm";
+import { budgetCategories, expenses, monthlyBudgets } from "@shared/schema";
 
 export interface IStorage {
   // Budget Categories
@@ -23,6 +24,7 @@ export interface IStorage {
   
   // Monthly Budgets
   getMonthlyBudget(month: string): Promise<MonthlyBudget | undefined>;
+  getMonthlyBudgets(): Promise<MonthlyBudget[]>;
   createMonthlyBudget(budget: InsertMonthlyBudget): Promise<MonthlyBudget>;
   updateMonthlyBudget(month: string, budget: Partial<InsertMonthlyBudget>): Promise<MonthlyBudget | undefined>;
 }
@@ -48,7 +50,7 @@ export class MemStorage implements IStorage {
   }
 
   async createBudgetCategory(insertCategory: InsertBudgetCategory): Promise<BudgetCategory> {
-    const id = randomUUID();
+    const id = crypto.randomUUID();
     const category: BudgetCategory = { 
       id,
       name: insertCategory.name,
@@ -84,7 +86,7 @@ export class MemStorage implements IStorage {
   }
 
   async createExpense(insertExpense: InsertExpense): Promise<Expense> {
-    const id = randomUUID();
+    const id = crypto.randomUUID();
     const expense: Expense = {
       id,
       amount: insertExpense.amount,
@@ -106,8 +108,12 @@ export class MemStorage implements IStorage {
     return this.monthlyBudgets.get(month);
   }
 
+  async getMonthlyBudgets(): Promise<MonthlyBudget[]> {
+    return Array.from(this.monthlyBudgets.values());
+  }
+
   async createMonthlyBudget(insertBudget: InsertMonthlyBudget): Promise<MonthlyBudget> {
-    const id = randomUUID();
+    const id = crypto.randomUUID();
     const budget: MonthlyBudget = {
       ...insertBudget,
       id,
@@ -127,4 +133,113 @@ export class MemStorage implements IStorage {
   }
 }
 
+import { createDb, DbType } from "./db";
+
+// ... imports ...
+
+export class DatabaseStorage implements IStorage {
+  private db: DbType;
+
+  constructor(db: DbType) {
+    this.db = db;
+  }
+
+  // Budget Categories
+  async getBudgetCategories(): Promise<BudgetCategory[]> {
+    return await this.db.select().from(budgetCategories);
+  }
+
+  async getBudgetCategory(id: string): Promise<BudgetCategory | undefined> {
+    const [category] = await this.db.select().from(budgetCategories).where(eq(budgetCategories.id, id));
+    return category;
+  }
+
+  async createBudgetCategory(insertCategory: InsertBudgetCategory): Promise<BudgetCategory> {
+    const [category] = await this.db
+      .insert(budgetCategories)
+      .values(insertCategory)
+      .returning();
+    return category;
+  }
+
+  async updateBudgetCategory(id: string, updates: Partial<InsertBudgetCategory>): Promise<BudgetCategory | undefined> {
+    const [category] = await this.db
+      .update(budgetCategories)
+      .set(updates)
+      .where(eq(budgetCategories.id, id))
+      .returning();
+    return category;
+  }
+
+  // Expenses
+  async getExpenses(month?: string): Promise<Expense[]> {
+    const query = this.db.select().from(expenses);
+    if (month) {
+      const all = await query;
+      return all.filter(e => e.date.startsWith(month));
+    }
+    return await query;
+  }
+
+  async getExpense(id: string): Promise<Expense | undefined> {
+    const [expense] = await this.db.select().from(expenses).where(eq(expenses.id, id));
+    return expense;
+  }
+
+  async createExpense(insertExpense: InsertExpense): Promise<Expense> {
+    const [expense] = await this.db
+      .insert(expenses)
+      .values(insertExpense)
+      .returning();
+    return expense;
+  }
+
+  async deleteExpense(id: string): Promise<boolean> {
+    const [deleted] = await this.db
+      .delete(expenses)
+      .where(eq(expenses.id, id))
+      .returning();
+    return !!deleted;
+  }
+
+  // Monthly Budgets
+  async getMonthlyBudget(month: string): Promise<MonthlyBudget | undefined> {
+    const [budget] = await this.db.select().from(monthlyBudgets).where(eq(monthlyBudgets.month, month));
+    return budget;
+  }
+
+  async getMonthlyBudgets(): Promise<MonthlyBudget[]> {
+    return await this.db.select().from(monthlyBudgets);
+  }
+
+  async createMonthlyBudget(insertBudget: InsertMonthlyBudget): Promise<MonthlyBudget> {
+    const [budget] = await this.db
+      .insert(monthlyBudgets)
+      .values(insertBudget)
+      .returning();
+    return budget;
+  }
+
+  async updateMonthlyBudget(month: string, updates: Partial<InsertMonthlyBudget>): Promise<MonthlyBudget | undefined> {
+    const [budget] = await this.db
+      .update(monthlyBudgets)
+      .set(updates)
+      .where(eq(monthlyBudgets.month, month))
+      .returning();
+    return budget;
+  }
+}
+
+// Export a factory or allow manual instantiation
+export const createStorage = (connection?: any) => {
+  if (connection) {
+    const db = createDb(connection);
+    return new DatabaseStorage(db);
+  }
+  return new MemStorage();
+};
+
+// Keep global storage for backward compatibility if env is set, otherwise MemStorage
+// For Cloudflare, this global is less useful as we inject D1, but we keep it for now.
 export const storage = new MemStorage();
+

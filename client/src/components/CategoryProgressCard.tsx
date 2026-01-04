@@ -19,6 +19,8 @@ import {
   Cat,
   Sparkle,
   DollarSign,
+  Gift,
+  Star,
 } from "lucide-react";
 
 interface CategoryProgressCardProps {
@@ -47,6 +49,8 @@ const iconMap: Record<string, any> = {
   Cat,
   Sparkle,
   DollarSign,
+  Gift,
+  Star,
 };
 
 export default function CategoryProgressCard({

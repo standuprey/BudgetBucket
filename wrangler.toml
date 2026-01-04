@@ -1,0 +1,11 @@
+name = "budget-bucket"
+pages_build_output_dir = "dist"
+compatibility_date = "2024-11-23"
+
+[vars]
+# DATABASE_URL will be set in the Cloudflare dashboard
+
+[[d1_databases]]
+binding = "DB"
+database_name = "budget-bucket-db"
+database_id = "fdde84f6-de32-43ed-bae5-b959ed2c23db"

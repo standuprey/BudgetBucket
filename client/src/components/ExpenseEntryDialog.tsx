@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -49,26 +49,34 @@ interface Category {
 interface ExpenseEntryDialogProps {
   categories: Category[];
   onAddExpense: (expense: ExpenseFormValues) => void;
+  defaultCategoryId?: string | null;
 }
 
-export default function ExpenseEntryDialog({ categories, onAddExpense }: ExpenseEntryDialogProps) {
+export default function ExpenseEntryDialog({ categories, onAddExpense, defaultCategoryId }: ExpenseEntryDialogProps) {
   const [open, setOpen] = useState(false);
 
   const form = useForm<ExpenseFormValues>({
     resolver: zodResolver(expenseFormSchema),
     defaultValues: {
       amount: "",
-      categoryId: "",
+      categoryId: defaultCategoryId || "",
       date: format(new Date(), "yyyy-MM-dd"),
       notes: "",
     },
   });
 
+  // Update categoryId when defaultCategoryId changes or dialog opens
+  useEffect(() => {
+    if (open && defaultCategoryId) {
+      form.setValue("categoryId", defaultCategoryId);
+    }
+  }, [open, defaultCategoryId, form]);
+
   const onSubmit = (values: ExpenseFormValues) => {
     onAddExpense(values);
     form.reset({
       amount: "",
-      categoryId: "",
+      categoryId: defaultCategoryId || "",
       date: format(new Date(), "yyyy-MM-dd"),
       notes: "",
     });
@@ -76,16 +84,18 @@ export default function ExpenseEntryDialog({ categories, onAddExpense }: Expense
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button
-          size="lg"
-          className="fixed bottom-6 right-6 h-16 w-16 rounded-full shadow-lg z-50"
-          data-testid="button-add-expense"
-        >
-          <Plus className="h-8 w-8" />
-        </Button>
-      </DialogTrigger>
+    <>
+      <Button
+        size="lg"
+        onClick={() => setOpen(true)}
+        className="h-16 w-16 rounded-full shadow-lg z-50"
+        style={{ position: 'fixed', bottom: '15px', right: '15px' }}
+        data-testid="button-add-expense"
+      >
+        <Plus className="h-8 w-8" />
+      </Button>
+      
+      <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="sm:max-w-md" data-testid="dialog-add-expense">
         <DialogHeader>
           <DialogTitle className="text-2xl font-bold">Add Expense</DialogTitle>
@@ -196,5 +206,6 @@ export default function ExpenseEntryDialog({ categories, onAddExpense }: Expense
         </Form>
       </DialogContent>
     </Dialog>
+    </>
   );
 }

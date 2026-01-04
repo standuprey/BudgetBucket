@@ -42,7 +42,10 @@ export async function createExpense(expense: {
   const response = await fetch("/api/expenses", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(expense),
+    body: JSON.stringify({
+      ...expense,
+      amount: parseFloat(expense.amount),
+    }),
   });
   if (!response.ok) throw new Error("Failed to create expense");
   return response.json();
@@ -53,6 +56,12 @@ export async function deleteExpense(id: string) {
     method: "DELETE",
   });
   if (!response.ok) throw new Error("Failed to delete expense");
+}
+
+export async function getBudgets(): Promise<MonthlyBudget[]> {
+  const response = await fetch("/api/budgets");
+  if (!response.ok) throw new Error("Failed to fetch budgets");
+  return response.json();
 }
 
 export async function getMonthlyBudget(month: string): Promise<MonthlyBudget | null> {

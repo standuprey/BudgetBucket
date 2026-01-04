@@ -1,29 +1,29 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, decimal, timestamp, date } from "drizzle-orm/pg-core";
+import { sqliteTable, text, integer, real } from "drizzle-orm/sqlite-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-export const budgetCategories = pgTable("budget_categories", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+export const budgetCategories = sqliteTable("budget_categories", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   name: text("name").notNull().unique(),
-  monthlyBudget: decimal("monthly_budget", { precision: 10, scale: 2 }).notNull(),
+  monthlyBudget: real("monthly_budget").notNull(), // Storing as real for simplicity, or text
   icon: text("icon").notNull().default("DollarSign"),
 });
 
-export const expenses = pgTable("expenses", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
-  categoryId: varchar("category_id").notNull(),
-  date: date("date").notNull(),
+export const expenses = sqliteTable("expenses", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  amount: real("amount").notNull(),
+  categoryId: text("category_id").notNull(),
+  date: text("date").notNull(), // YYYY-MM-DD
   notes: text("notes"),
-  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
 });
 
-export const monthlyBudgets = pgTable("monthly_budgets", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+export const monthlyBudgets = sqliteTable("monthly_budgets", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   month: text("month").notNull().unique(), // Format: YYYY-MM
-  totalIncome: decimal("total_income", { precision: 10, scale: 2 }).notNull(),
-  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  totalIncome: real("total_income").notNull(),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
 });
 
 export const insertBudgetCategorySchema = createInsertSchema(budgetCategories).omit({

@@ -19,6 +19,8 @@ import {
   Cat,
   Sparkle,
   DollarSign,
+  Gift,
+  Star,
 } from "lucide-react";
 
 interface Expense {
@@ -54,6 +56,8 @@ const iconMap: Record<string, any> = {
   Cat,
   Sparkle,
   DollarSign,
+  Gift,
+  Star,
 };
 
 export default function ExpenseList({ expenses, maxItems = 10 }: ExpenseListProps) {
