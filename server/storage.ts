@@ -15,6 +15,7 @@ export interface IStorage {
   getBudgetCategory(id: string): Promise<BudgetCategory | undefined>;
   createBudgetCategory(category: InsertBudgetCategory): Promise<BudgetCategory>;
   updateBudgetCategory(id: string, category: Partial<InsertBudgetCategory>): Promise<BudgetCategory | undefined>;
+  deleteBudgetCategory(id: string): Promise<boolean>;
   
   // Expenses
   getExpenses(month?: string): Promise<Expense[]>;
@@ -55,7 +56,8 @@ export class MemStorage implements IStorage {
       id,
       name: insertCategory.name,
       monthlyBudget: insertCategory.monthlyBudget,
-      icon: insertCategory.icon || "DollarSign"
+      icon: insertCategory.icon || "DollarSign",
+      isAnnual: insertCategory.isAnnual ?? false
     };
     this.categories.set(id, category);
     return category;
@@ -68,6 +70,10 @@ export class MemStorage implements IStorage {
     const updated: BudgetCategory = { ...category, ...updates };
     this.categories.set(id, updated);
     return updated;
+  }
+
+  async deleteBudgetCategory(id: string): Promise<boolean> {
+    return this.categories.delete(id);
   }
 
   // Expenses
@@ -169,6 +175,11 @@ export class DatabaseStorage implements IStorage {
       .where(eq(budgetCategories.id, id))
       .returning();
     return category;
+  }
+
+  async deleteBudgetCategory(id: string): Promise<boolean> {
+    const result = await this.db.delete(budgetCategories).where(eq(budgetCategories.id, id));
+    return true; // Drizzle-ORM with D1/SQLite doesn't easily return affected rows in a way that's consistent here
   }
 
   // Expenses

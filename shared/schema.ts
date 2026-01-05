@@ -6,8 +6,9 @@ import { z } from "zod";
 export const budgetCategories = sqliteTable("budget_categories", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   name: text("name").notNull().unique(),
-  monthlyBudget: real("monthly_budget").notNull(), // Storing as real for simplicity, or text
+  monthlyBudget: real("monthly_budget").notNull(), // This will be monthly if isAnnual is false, or annual if true
   icon: text("icon").notNull().default("DollarSign"),
+  isAnnual: integer("is_annual", { mode: "boolean" }).notNull().default(false),
 });
 
 export const expenses = sqliteTable("expenses", {
@@ -26,16 +27,22 @@ export const monthlyBudgets = sqliteTable("monthly_budgets", {
   createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
 });
 
-export const insertBudgetCategorySchema = createInsertSchema(budgetCategories).omit({
+export const insertBudgetCategorySchema = createInsertSchema(budgetCategories, {
+  monthlyBudget: z.coerce.number(),
+}).omit({
   id: true,
 });
 
-export const insertExpenseSchema = createInsertSchema(expenses).omit({
+export const insertExpenseSchema = createInsertSchema(expenses, {
+  amount: z.coerce.number(),
+}).omit({
   id: true,
   createdAt: true,
 });
 
-export const insertMonthlyBudgetSchema = createInsertSchema(monthlyBudgets).omit({
+export const insertMonthlyBudgetSchema = createInsertSchema(monthlyBudgets, {
+  totalIncome: z.coerce.number(),
+}).omit({
   id: true,
   createdAt: true,
 });

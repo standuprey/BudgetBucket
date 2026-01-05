@@ -22,7 +22,7 @@ export default function BudgetOverview({ totalBudget, totalSpent, totalIncome }:
   };
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div className="grid grid-cols-2 md:grid-cols-2 gap-4">
       <Card data-testid="card-total-budget">
         <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
           <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -31,7 +31,7 @@ export default function BudgetOverview({ totalBudget, totalSpent, totalIncome }:
           <DollarSign className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
-          <div className="text-3xl font-bold" data-testid="text-total-budget">
+          <div className="text-2xl font-bold" data-testid="text-total-budget">
             {formatCurrency(totalBudget)}
           </div>
           <p className="text-xs text-muted-foreground mt-1">
@@ -48,7 +48,7 @@ export default function BudgetOverview({ totalBudget, totalSpent, totalIncome }:
           <Wallet className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
-          <div className="text-3xl font-bold" data-testid="text-total-spent">
+          <div className="text-2xl font-bold" data-testid="text-total-spent">
             {formatCurrency(totalSpent)}
           </div>
           <p className="text-xs text-muted-foreground mt-1">
@@ -66,7 +66,7 @@ export default function BudgetOverview({ totalBudget, totalSpent, totalIncome }:
         </CardHeader>
         <CardContent>
           <div
-            className={`text-3xl font-bold ${remaining < 0 ? 'text-destructive' : ''}`}
+            className={`text-2xl font-bold ${remaining < 0 ? 'text-destructive' : ''}`}
             data-testid="text-remaining"
           >
             {formatCurrency(remaining)}
@@ -86,7 +86,7 @@ export default function BudgetOverview({ totalBudget, totalSpent, totalIncome }:
         </CardHeader>
         <CardContent>
           <div
-            className={`text-3xl font-bold ${savings < 0 ? 'text-destructive' : 'text-primary'}`}
+            className={`text-2xl font-bold ${savings < 0 ? 'text-destructive' : 'text-primary'}`}
             data-testid="text-savings"
           >
             {formatCurrency(savings)}

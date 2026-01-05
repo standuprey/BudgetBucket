@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import type { BudgetCategory, Expense, MonthlyBudget } from "@shared/schema";
 import { format } from "date-fns";
-import { ChevronLeft, ChevronRight, Calendar, DollarSign, Gift, Star } from "lucide-react";
+import { ChevronLeft, ChevronRight, Calendar, DollarSign, Gift, Star, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import BudgetOverview from "@/components/BudgetOverview";
@@ -11,7 +11,9 @@ import ExpenseList from "@/components/ExpenseList";
 import ExpenseEntryDialog from "@/components/ExpenseEntryDialog";
 import MonthlyRecap from "@/components/MonthlyRecap";
 import ThemeToggle from "@/components/ThemeToggle";
-import { getCategories, getExpenses, createExpense, getMonthlyBudget, getBudgets, initializeDefaultData } from "@/lib/api";
+import ConfirmDialog from "@/components/ConfirmDialog";
+import { getCategories, getExpenses, createExpense, getMonthlyBudget, getBudgets, initializeDefaultData, createCategory, deleteCategory, updateCategory, deleteExpense } from "@/lib/api";
+import CategoryEntryDialog from "@/components/CategoryEntryDialog";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
@@ -28,13 +30,13 @@ const DEFAULT_CATEGORIES = [
   { name: "Home Improvement", monthlyBudget: 730, icon: "Wrench" },
   { name: "Medical / Meds / Supplements", monthlyBudget: 80, icon: "HeartPulse" },
   { name: "Clothes", monthlyBudget: 300, icon: "Shirt" },
-  { name: "Travel", monthlyBudget: 250, icon: "Plane" },
   { name: "Grooming", monthlyBudget: 500, icon: "Scissors" },
   { name: "Fun", monthlyBudget: 500, icon: "PartyPopper" },
   { name: "Miou Miou", monthlyBudget: 150, icon: "Cat" },
   { name: "Cleaning Help", monthlyBudget: 150, icon: "Sparkle" },
   { name: "Botox", monthlyBudget: 332, icon: "Sparkles" },
-  { name: "Gift", monthlyBudget: 300, icon: "Gift" },
+  { name: "Travel", monthlyBudget: 3000, icon: "Plane", isAnnual: true },
+  { name: "Gift", monthlyBudget: 3600, icon: "Gift", isAnnual: true },
 ];
 
 const DEFAULT_INCOME = 16060;
@@ -94,29 +96,44 @@ export default function Home() {
     queryFn: getBudgets,
   });
 
+  const updateCategoryMutation = useMutation({
+    mutationFn: ({ id, updates }: { id: string; updates: any }) => updateCategory(id, updates),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/categories'] });
+    },
+    onError: (error) => {
+      console.error('Update category failed:', error);
+      toast({
+        title: "Update Failed",
+        description: "Could not save category changes. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   useEffect(() => {
     const initializeData = async () => {
       if (!categoriesLoading && categories.length === 0) {
-        console.log('Initializing default data...');
         try {
-          const result = await initializeDefaultData(DEFAULT_CATEGORIES, DEFAULT_INCOME, currentMonthStr);
-          console.log('Initialization successful:', result);
+          await initializeDefaultData(DEFAULT_CATEGORIES, DEFAULT_INCOME, currentMonthStr);
           await queryClient.invalidateQueries({ queryKey: ['/api/categories'] });
           await queryClient.invalidateQueries({ queryKey: ['/api/budgets', currentMonthStr] });
-          // Force refetch
-          await queryClient.refetchQueries({ queryKey: ['/api/categories'] });
         } catch (error) {
-          console.error('Failed to initialize default data:', error);
-          toast({
-            title: "Initialization Error",
-            description: error instanceof Error ? error.message : "Failed to initialize budget data",
-            variant: "destructive",
-          });
+          console.error('Failed to sync default data:', error);
         }
       }
     };
     initializeData();
-  }, [categoriesLoading, categories.length, currentMonthStr, toast]);
+  }, [categories.length, categoriesLoading, currentMonthStr]);
+
+  const sortedCategories = useMemo(() => {
+    return [...categories].sort((a, b) => {
+      // Annual categories at the end
+      if (a.isAnnual && !b.isAnnual) return 1;
+      if (!a.isAnnual && b.isAnnual) return -1;
+      return a.name.localeCompare(b.name);
+    });
+  }, [categories]);
 
   const createExpenseMutation = useMutation({
     mutationFn: createExpense,
@@ -140,18 +157,120 @@ export default function Home() {
     createExpenseMutation.mutate(expenseData);
   };
 
+  const createCategoryMutation = useMutation({
+    mutationFn: createCategory,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/categories'] });
+      toast({
+        title: "Category Added",
+        description: "Your new budget category has been created.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to create category. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteCategoryMutation = useMutation({
+    mutationFn: deleteCategory,
+    onSuccess: (_, deletedId) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/categories'] });
+      if (selectedCategoryId === deletedId) {
+        setSelectedCategoryId(null);
+      }
+      toast({
+        title: "Category Deleted",
+        description: "The category has been removed.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to delete category. It might have expenses linked to it.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteExpenseMutation = useMutation({
+    mutationFn: deleteExpense,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/expenses', currentMonthStr] });
+      queryClient.invalidateQueries({ queryKey: ['/api/expenses'] });
+      toast({
+        title: "Expense Deleted",
+        description: "The expense has been removed.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to delete expense. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleDeleteExpense = (id: string) => {
+    deleteExpenseMutation.mutate(id);
+  };
+
+  const handleAddCategory = (categoryData: any) => {
+    createCategoryMutation.mutate(categoryData);
+  };
+
+  const handleDeleteCategory = (id: string) => {
+    deleteCategoryMutation.mutate(id);
+  };
+
+  const handleUpdateCategory = (id: string, updates: any) => {
+    updateCategoryMutation.mutate({ id, updates });
+  };
+
+  // Yearly calculations
+  const currentYear = format(currentMonth, 'yyyy');
+  const currentMonthIndex = currentMonth.getMonth(); // 0-11
+  const monthsSoFar = currentMonthIndex + 1;
+
+  const yearlyExpenses = allExpenses.filter(e => e.date.startsWith(currentYear));
+  const yearlySpent = yearlyExpenses.reduce((sum, e) => {
+    const amount = typeof e.amount === 'string' ? parseFloat(e.amount) : e.amount;
+    return sum + amount;
+  }, 0);
+
   const categorySpending = useMemo(() => {
     const spending: Record<string, number> = {};
-    expenses.forEach((expense) => {
-      const amount = typeof expense.amount === 'string' ? parseFloat(expense.amount) : expense.amount;
-      spending[expense.categoryId] = (spending[expense.categoryId] || 0) + amount;
+    
+    categories.forEach(category => {
+      if (category.isAnnual) {
+        // For annual categories, calculate spending for the entire current year
+        const annualExpenses = allExpenses.filter(e => 
+          e.categoryId === category.id && e.date.startsWith(currentYear)
+        );
+        spending[category.id] = annualExpenses.reduce((sum, e) => {
+          const amount = typeof e.amount === 'string' ? parseFloat(e.amount) : e.amount;
+          return sum + amount;
+        }, 0);
+      } else {
+        // For monthly categories, use the monthly expenses already fetched
+        const monthlyExpenses = expenses.filter(e => e.categoryId === category.id);
+        spending[category.id] = monthlyExpenses.reduce((sum, e) => {
+          const amount = typeof e.amount === 'string' ? parseFloat(e.amount) : e.amount;
+          return sum + amount;
+        }, 0);
+      }
     });
+    
     return spending;
-  }, [expenses]);
+  }, [categories, expenses, allExpenses, currentYear]);
 
   const totalBudget = categories.reduce((sum, cat) => {
     const budget = typeof cat.monthlyBudget === 'string' ? parseFloat(cat.monthlyBudget) : cat.monthlyBudget;
-    return sum + budget;
+    return sum + (cat.isAnnual ? budget / 12 : budget);
   }, 0);
   
   const totalSpent = expenses.reduce((sum, exp) => {
@@ -165,17 +284,6 @@ export default function Home() {
 
   const savings = totalIncome - totalSpent;
 
-  // Yearly calculations
-  const currentYear = format(currentMonth, 'yyyy');
-  const currentMonthIndex = currentMonth.getMonth(); // 0-11
-  const monthsSoFar = currentMonthIndex + 1;
-
-  const yearlyExpenses = allExpenses.filter(e => e.date.startsWith(currentYear));
-  const yearlySpent = yearlyExpenses.reduce((sum, e) => {
-    const amount = typeof e.amount === 'string' ? parseFloat(e.amount) : e.amount;
-    return sum + amount;
-  }, 0);
-  
   // Calculate yearly income by checking each month's budget record
   let yearlyIncome = 0;
   for (let i = 0; i < monthsSoFar; i++) {
@@ -326,25 +434,23 @@ export default function Home() {
             </TabsTrigger>
           </TabsList>
           <TabsContent value="categories" className="space-y-4 mt-6">
-            {categories.map((category) => {
+            {sortedCategories.map((category) => {
               const budget = typeof category.monthlyBudget === 'string' ? parseFloat(category.monthlyBudget) : category.monthlyBudget;
               return (
-                <div 
-                  key={category.id}
-                  onClick={() => {
-                    setSelectedCategoryId(category.id);
-                  }}
-                  className="cursor-pointer"
-                >
-                  <CategoryProgressCard
-                    categoryName={category.name}
-                    icon={category.icon}
-                    spent={categorySpending[category.id] || 0}
-                    budget={budget}
-                  />
-                </div>
+                <CategoryProgressCard
+                  id={category.id}
+                  categoryName={category.name}
+                  icon={category.icon}
+                  spent={categorySpending[category.id] || 0}
+                  budget={budget}
+                  isAnnual={category.isAnnual}
+                  onDelete={() => handleDeleteCategory(category.id)}
+                  onUpdate={handleUpdateCategory}
+                  onClick={() => setSelectedCategoryId(category.id)}
+                />
               );
             })}
+            <CategoryEntryDialog onAddCategory={handleAddCategory} />
           </TabsContent>
           <TabsContent value="expenses" className="mt-6 space-y-4">
             {selectedCategoryId && (
@@ -354,16 +460,39 @@ export default function Home() {
                     Filtered by: {categories.find(c => c.id === selectedCategoryId)?.name}
                   </span>
                 </div>
-                <Button 
-                  variant="ghost" 
-                  size="sm"
-                  onClick={() => setSelectedCategoryId(null)}
-                >
-                  Clear Filter
-                </Button>
+                <div className="flex items-center gap-2">
+                  <ConfirmDialog
+                    title="Delete Category"
+                    description={`Are you sure you want to delete the "${categories.find(c => c.id === selectedCategoryId)?.name}" category? This action cannot be undone.`}
+                    onConfirm={() => handleDeleteCategory(selectedCategoryId)}
+                    variant="destructive"
+                    confirmText="Delete"
+                  >
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                      data-testid="button-delete-filtered-category"
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete Category
+                    </Button>
+                  </ConfirmDialog>
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={() => setSelectedCategoryId(null)}
+                    data-testid="button-clear-filter"
+                  >
+                    Clear Filter
+                  </Button>
+                </div>
               </div>
             )}
-            <ExpenseList expenses={enrichedExpenses} />
+            <ExpenseList 
+              expenses={enrichedExpenses} 
+              onDelete={handleDeleteExpense}
+            />
           </TabsContent>
         </Tabs>
       </main>

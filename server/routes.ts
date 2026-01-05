@@ -48,6 +48,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.delete("/api/categories/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const deleted = await storage.deleteBudgetCategory(id);
+      if (!deleted) {
+        res.status(404).json({ message: "Category not found" });
+      } else {
+        res.status(204).send();
+      }
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete category" });
+    }
+  });
+
   // Expenses
   app.get("/api/expenses", async (req, res) => {
     try {
@@ -109,6 +123,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Monthly Budgets
+  app.get("/api/budgets", async (req, res) => {
+    try {
+      const budgets = await storage.getMonthlyBudgets();
+      res.json(budgets);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch budgets" });
+    }
+  });
+
   app.get("/api/budgets/:month", async (req, res) => {
     try {
       const { month } = req.params;
@@ -168,11 +191,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Create and validate categories
       const createdCategories = [];
+      const existingCategories = await storage.getBudgetCategories();
+      
+      // Cleanup duplicates if any (keep the first one found for each name)
+      const seenNames = new Set();
+      const categoriesToKeep = [];
+      const duplicatesToDelete = [];
+      
+      for (const existing of existingCategories) {
+        if (seenNames.has(existing.name)) {
+          duplicatesToDelete.push(existing.id);
+        } else {
+          seenNames.add(existing.name);
+          categoriesToKeep.push(existing);
+        }
+      }
+
+      if (duplicatesToDelete.length > 0) {
+        console.log(`Deleting ${duplicatesToDelete.length} duplicate categories...`);
+        for (const id of duplicatesToDelete) {
+          await storage.deleteBudgetCategory(id);
+        }
+      }
+
       for (const cat of categories) {
         try {
           const validated = insertBudgetCategorySchema.parse(cat);
-          const category = await storage.createBudgetCategory(validated);
-          createdCategories.push(category);
+          const existing = categoriesToKeep.find(c => c.name === validated.name);
+          
+          if (!existing) {
+            const category = await storage.createBudgetCategory(validated);
+            createdCategories.push(category);
+            categoriesToKeep.push(category);
+          } else {
+            createdCategories.push(existing);
+          }
         } catch (error) {
           if (error instanceof z.ZodError) {
             return res.status(400).json({ 
@@ -185,12 +238,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
-      // Validate and create monthly budget
-      const budgetData = insertMonthlyBudgetSchema.parse({
-        month,
-        totalIncome: monthlyIncome.toString(),
-      });
-      const budget = await storage.createMonthlyBudget(budgetData);
+      // Validate and create monthly budget if it doesn't exist
+      const existingBudget = await storage.getMonthlyBudget(month);
+      let budget = existingBudget;
+      
+      if (!existingBudget) {
+        const budgetData = insertMonthlyBudgetSchema.parse({
+          month,
+          totalIncome: monthlyIncome,
+        });
+        budget = await storage.createMonthlyBudget(budgetData);
+      }
       
       res.status(201).json({
         categories: createdCategories,

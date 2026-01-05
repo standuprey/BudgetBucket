@@ -59,6 +59,20 @@ app.patch("/categories/:id", async (c) => {
   }
 });
 
+app.delete("/categories/:id", async (c) => {
+  try {
+    const storage = createStorage(c.env.DB);
+    const id = c.req.param("id");
+    const deleted = await storage.deleteBudgetCategory(id);
+    if (!deleted) {
+      return c.json({ message: "Category not found" }, 404);
+    }
+    return c.body(null, 204);
+  } catch (error) {
+    return c.json({ message: "Failed to delete category" }, 500);
+  }
+});
+
 // Expenses
 app.get("/expenses", async (c) => {
   try {
@@ -194,13 +208,44 @@ app.post("/initialize", async (c) => {
     
     // Create and validate categories
     const createdCategories = [];
+    const existingCategories = await storage.getBudgetCategories();
+    
+    // Cleanup duplicates if any (keep the first one found for each name)
+    const seenNames = new Set();
+    const categoriesToKeep = [];
+    const duplicatesToDelete = [];
+    
+    for (const existing of existingCategories) {
+      if (seenNames.has(existing.name)) {
+        duplicatesToDelete.push(existing.id);
+      } else {
+        seenNames.add(existing.name);
+        categoriesToKeep.push(existing);
+      }
+    }
+
+    if (duplicatesToDelete.length > 0) {
+      console.log(`Deleting ${duplicatesToDelete.length} duplicate categories...`);
+      for (const id of duplicatesToDelete) {
+        await storage.deleteBudgetCategory(id);
+      }
+    }
+
     for (const cat of categories) {
       try {
         const validated = insertBudgetCategorySchema.parse(cat);
-        const category = await storage.createBudgetCategory(validated);
-        createdCategories.push(category);
+        const existing = categoriesToKeep.find(c => c.name === validated.name);
+        
+        if (!existing) {
+          const category = await storage.createBudgetCategory(validated);
+          createdCategories.push(category);
+          categoriesToKeep.push(category); // Add to local list to prevent duplicates in same loop
+        } else {
+          createdCategories.push(existing);
+        }
       } catch (error) {
         if (error instanceof z.ZodError) {
+          console.error("Zod Error in category validation:", error.errors);
           return c.json({ 
             message: "Invalid category data", 
             errors: error.errors,
@@ -211,12 +256,17 @@ app.post("/initialize", async (c) => {
       }
     }
     
-    // Validate and create monthly budget
-    const budgetData = insertMonthlyBudgetSchema.parse({
-      month,
-      totalIncome: monthlyIncome,
-    });
-    const budget = await storage.createMonthlyBudget(budgetData);
+    // Validate and create monthly budget if it doesn't exist
+    const existingBudget = await storage.getMonthlyBudget(month);
+    let budget = existingBudget;
+    
+    if (!existingBudget) {
+      const budgetData = insertMonthlyBudgetSchema.parse({
+        month,
+        totalIncome: monthlyIncome,
+      });
+      budget = await storage.createMonthlyBudget(budgetData);
+    }
     
     return c.json({
       categories: createdCategories,

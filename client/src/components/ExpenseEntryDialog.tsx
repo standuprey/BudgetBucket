@@ -88,7 +88,7 @@ export default function ExpenseEntryDialog({ categories, onAddExpense, defaultCa
       <Button
         size="lg"
         onClick={() => setOpen(true)}
-        className="h-16 w-16 rounded-full shadow-lg z-50"
+        className="h-16 w-16 rounded-full shadow-lg z-[100]"
         style={{ position: 'fixed', bottom: '15px', right: '15px' }}
         data-testid="button-add-expense"
       >

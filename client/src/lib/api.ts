@@ -16,6 +16,28 @@ export async function getCategories(): Promise<BudgetCategory[]> {
   return response.json();
 }
 
+export async function createCategory(category: {
+  name: string;
+  monthlyBudget: number;
+  icon: string;
+  isAnnual?: boolean;
+}): Promise<BudgetCategory> {
+  const response = await fetch("/api/categories", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(category),
+  });
+  if (!response.ok) throw new Error("Failed to create category");
+  return response.json();
+}
+
+export async function deleteCategory(id: string) {
+  const response = await fetch(`/api/categories/${id}`, {
+    method: "DELETE",
+  });
+  if (!response.ok) throw new Error("Failed to delete category");
+}
+
 export async function updateCategory(id: string, updates: Partial<BudgetCategory>) {
   const response = await fetch(`/api/categories/${id}`, {
     method: "PATCH",
