@@ -7,11 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import BudgetOverview from "@/components/BudgetOverview";
 import CategoryProgressCard from "@/components/CategoryProgressCard";
+import CategoryEditDialog from "@/components/CategoryEditDialog";
 import ExpenseList from "@/components/ExpenseList";
 import ExpenseEntryDialog from "@/components/ExpenseEntryDialog";
 import MonthlyRecap from "@/components/MonthlyRecap";
 import ThemeToggle from "@/components/ThemeToggle";
-import { getCategories, getExpenses, createExpense, getMonthlyBudget, getBudgets, initializeDefaultData } from "@/lib/api";
+import { getCategories, getExpenses, createExpense, getMonthlyBudget, getBudgets, initializeDefaultData, deleteCategory, updateCategory } from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
@@ -43,6 +44,7 @@ export default function Home() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [showRecap, setShowRecap] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+  const [editingCategory, setEditingCategory] = useState<BudgetCategory | null>(null);
   const { toast } = useToast();
   
   const currentMonthStr = useMemo(() => format(currentMonth, 'yyyy-MM'), [currentMonth]);
@@ -138,6 +140,54 @@ export default function Home() {
 
   const handleAddExpense = (expenseData: any) => {
     createExpenseMutation.mutate(expenseData);
+  };
+
+  const updateCategoryMutation = useMutation({
+    mutationFn: ({ id, updates }: { id: string; updates: Partial<BudgetCategory> }) => updateCategory(id, updates),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/categories'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/expenses'] });
+      toast({
+        title: "Category Updated",
+        description: "The category has been successfully updated.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update category.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleUpdateCategory = (id: string, updates: Partial<BudgetCategory>) => {
+    updateCategoryMutation.mutate({ id, updates });
+  };
+
+  const deleteCategoryMutation = useMutation({
+    mutationFn: deleteCategory,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/categories'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/expenses'] });
+      toast({
+        title: "Category Deleted",
+        description: "The category and its associated expenses have been removed.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete category.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleDeleteCategory = (categoryId: string) => {
+    if (confirm("Are you sure you want to delete this category? All associated expenses will also be deleted.")) {
+      deleteCategoryMutation.mutate(categoryId);
+    }
   };
 
   const categorySpending = useMemo(() => {
@@ -329,20 +379,16 @@ export default function Home() {
             {categories.map((category) => {
               const budget = typeof category.monthlyBudget === 'string' ? parseFloat(category.monthlyBudget) : category.monthlyBudget;
               return (
-                <div 
+                <CategoryProgressCard
                   key={category.id}
-                  onClick={() => {
-                    setSelectedCategoryId(category.id);
-                  }}
-                  className="cursor-pointer"
-                >
-                  <CategoryProgressCard
-                    categoryName={category.name}
-                    icon={category.icon}
-                    spent={categorySpending[category.id] || 0}
-                    budget={budget}
-                  />
-                </div>
+                  categoryName={category.name}
+                  icon={category.icon}
+                  spent={categorySpending[category.id] || 0}
+                  budget={budget}
+                  onDelete={() => handleDeleteCategory(category.id)}
+                  onEdit={() => setEditingCategory(category)}
+                  onClick={() => setSelectedCategoryId(category.id)}
+                />
               );
             })}
           </TabsContent>
@@ -372,6 +418,13 @@ export default function Home() {
         categories={categories}
         onAddExpense={handleAddExpense}
         defaultCategoryId={selectedCategoryId}
+      />
+
+      <CategoryEditDialog
+        category={editingCategory}
+        open={editingCategory !== null}
+        onOpenChange={(open) => !open && setEditingCategory(null)}
+        onSave={handleUpdateCategory}
       />
 
       <MonthlyRecap

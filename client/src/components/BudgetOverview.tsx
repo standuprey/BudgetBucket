@@ -22,16 +22,16 @@ export default function BudgetOverview({ totalBudget, totalSpent, totalIncome }:
   };
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div className="grid grid-cols-2 gap-3 md:gap-4">
       <Card data-testid="card-total-budget">
-        <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium text-muted-foreground">
+        <CardHeader className="flex flex-row items-center justify-between gap-1 md:gap-2 space-y-0 p-3 md:p-6 pb-1 md:pb-2">
+          <CardTitle className="text-xs md:text-sm font-medium text-muted-foreground">
             Total Budget
           </CardTitle>
           <DollarSign className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
-        <CardContent>
-          <div className="text-3xl font-bold" data-testid="text-total-budget">
+        <CardContent className="p-3 pt-0 md:p-6 md:pt-0">
+          <div className="text-2xl md:text-3xl font-bold" data-testid="text-total-budget">
             {formatCurrency(totalBudget)}
           </div>
           <p className="text-xs text-muted-foreground mt-1">
@@ -41,14 +41,14 @@ export default function BudgetOverview({ totalBudget, totalSpent, totalIncome }:
       </Card>
 
       <Card data-testid="card-total-spent">
-        <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium text-muted-foreground">
+        <CardHeader className="flex flex-row items-center justify-between gap-1 md:gap-2 space-y-0 p-3 md:p-6 pb-1 md:pb-2">
+          <CardTitle className="text-xs md:text-sm font-medium text-muted-foreground">
             Total Spent
           </CardTitle>
           <Wallet className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
-        <CardContent>
-          <div className="text-3xl font-bold" data-testid="text-total-spent">
+        <CardContent className="p-3 pt-0 md:p-6 md:pt-0">
+          <div className="text-2xl md:text-3xl font-bold" data-testid="text-total-spent">
             {formatCurrency(totalSpent)}
           </div>
           <p className="text-xs text-muted-foreground mt-1">
@@ -58,15 +58,15 @@ export default function BudgetOverview({ totalBudget, totalSpent, totalIncome }:
       </Card>
 
       <Card data-testid="card-remaining">
-        <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium text-muted-foreground">
+        <CardHeader className="flex flex-row items-center justify-between gap-1 md:gap-2 space-y-0 p-3 md:p-6 pb-1 md:pb-2">
+          <CardTitle className="text-xs md:text-sm font-medium text-muted-foreground">
             Remaining
           </CardTitle>
           <TrendingUp className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-3 pt-0 md:p-6 md:pt-0">
           <div
-            className={`text-3xl font-bold ${remaining < 0 ? 'text-destructive' : ''}`}
+            className={`text-2xl md:text-3xl font-bold ${remaining < 0 ? 'text-destructive' : ''}`}
             data-testid="text-remaining"
           >
             {formatCurrency(remaining)}
@@ -78,15 +78,15 @@ export default function BudgetOverview({ totalBudget, totalSpent, totalIncome }:
       </Card>
 
       <Card data-testid="card-savings">
-        <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium text-muted-foreground">
+        <CardHeader className="flex flex-row items-center justify-between gap-1 md:gap-2 space-y-0 p-3 md:p-6 pb-1 md:pb-2">
+          <CardTitle className="text-xs md:text-sm font-medium text-muted-foreground">
             Savings
           </CardTitle>
           <PiggyBank className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-3 pt-0 md:p-6 md:pt-0">
           <div
-            className={`text-3xl font-bold ${savings < 0 ? 'text-destructive' : 'text-primary'}`}
+            className={`text-2xl md:text-3xl font-bold ${savings < 0 ? 'text-destructive' : 'text-primary'}`}
             data-testid="text-savings"
           >
             {formatCurrency(savings)}

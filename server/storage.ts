@@ -27,6 +27,7 @@ export interface IStorage {
   getMonthlyBudgets(): Promise<MonthlyBudget[]>;
   createMonthlyBudget(budget: InsertMonthlyBudget): Promise<MonthlyBudget>;
   updateMonthlyBudget(month: string, budget: Partial<InsertMonthlyBudget>): Promise<MonthlyBudget | undefined>;
+  deleteBudgetCategory(id: string): Promise<boolean>;
 }
 
 export class MemStorage implements IStorage {
@@ -68,6 +69,19 @@ export class MemStorage implements IStorage {
     const updated: BudgetCategory = { ...category, ...updates };
     this.categories.set(id, updated);
     return updated;
+  }
+
+  async deleteBudgetCategory(id: string): Promise<boolean> {
+    const deleted = this.categories.delete(id);
+    if (deleted) {
+      // Also delete associated expenses
+      for (const [expenseId, expense] of Array.from(this.expenses.entries())) {
+        if (expense.categoryId === id) {
+          this.expenses.delete(expenseId);
+        }
+      }
+    }
+    return deleted;
   }
 
   // Expenses
@@ -169,6 +183,19 @@ export class DatabaseStorage implements IStorage {
       .where(eq(budgetCategories.id, id))
       .returning();
     return category;
+  }
+
+  async deleteBudgetCategory(id: string): Promise<boolean> {
+    // Start by deleting associated expenses to maintain referential integrity
+    await this.db
+      .delete(expenses)
+      .where(eq(expenses.categoryId, id));
+
+    const [deleted] = await this.db
+      .delete(budgetCategories)
+      .where(eq(budgetCategories.id, id))
+      .returning();
+    return !!deleted;
   }
 
   // Expenses

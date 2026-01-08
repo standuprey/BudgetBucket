@@ -59,6 +59,20 @@ app.patch("/categories/:id", async (c) => {
   }
 });
 
+app.delete("/categories/:id", async (c) => {
+  try {
+    const storage = createStorage(c.env.DB);
+    const id = c.req.param("id");
+    const deleted = await storage.deleteBudgetCategory(id);
+    if (!deleted) {
+      return c.json({ message: "Category not found" }, 404);
+    }
+    return c.body(null, 204);
+  } catch (error) {
+    return c.json({ message: "Failed to delete category" }, 500);
+  }
+});
+
 // Expenses
 app.get("/expenses", async (c) => {
   try {

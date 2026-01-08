@@ -26,6 +26,13 @@ export async function updateCategory(id: string, updates: Partial<BudgetCategory
   return response.json();
 }
 
+export async function deleteCategory(id: string) {
+  const response = await fetch(`/api/categories/${id}`, {
+    method: "DELETE",
+  });
+  if (!response.ok) throw new Error("Failed to delete category");
+}
+
 export async function getExpenses(month?: string): Promise<Expense[]> {
   const url = month ? `/api/expenses?month=${month}` : "/api/expenses";
   const response = await fetch(url);
